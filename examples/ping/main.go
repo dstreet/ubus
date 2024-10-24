@@ -44,5 +44,5 @@ func main() {
 	}()
 
 	<-ctx.Done()
-	transport.Close()
+	b.Close()
 }

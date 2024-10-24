@@ -18,6 +18,7 @@ type handlerFn func(msg Message)
 type MessageTransport interface {
 	Subscribe(chan Message)
 	Push(Message)
+	Close() error
 }
 
 type EventMatcher interface {
@@ -70,6 +71,14 @@ func (b *Bus) On(event string, fn handlerFn) *handler {
 
 func (b *Bus) Emit(msg Message) (done chan struct{}) {
 	return b.emit(msg, false)
+}
+
+func (b *Bus) Close() error {
+	if b.transport == nil {
+		return nil
+	}
+
+	return b.transport.Close()
 }
 
 func (b *Bus) emit(msg Message, skipTransport bool) (done chan struct{}) {
