@@ -8,7 +8,7 @@ import (
 )
 
 type Bus struct {
-	handlers  map[string]*handler
+	handlers  map[string]*Handler
 	transport MessageTransport
 	matcher   EventMatcher
 }
@@ -29,7 +29,7 @@ const matchTransportEventName = "$ubus.transport"
 
 func New(opts ...Option) *Bus {
 	bus := &Bus{
-		handlers: make(map[string]*handler, 0),
+		handlers: make(map[string]*Handler, 0),
 		matcher:  &ExactMatchMatcher{},
 	}
 
@@ -53,11 +53,11 @@ func New(opts ...Option) *Bus {
 	return bus
 }
 
-func (b *Bus) On(event string, fn handlerFn) *handler {
+func (b *Bus) On(event string, fn handlerFn) *Handler {
 	id, _ := uuid.NewRandom()
 	idStr := id.String()
 
-	h := &handler{
+	h := &Handler{
 		event: event,
 		fn:    fn,
 		remove: func() {
@@ -111,13 +111,13 @@ func (b *Bus) emit(msg Message, skipTransport bool) (done chan struct{}) {
 	return
 }
 
-type handler struct {
+type Handler struct {
 	event  string
 	fn     handlerFn
 	remove func()
 }
 
-func (h *handler) Off() {
+func (h *Handler) Off() {
 	h.remove()
 }
 
