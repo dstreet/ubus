@@ -19,6 +19,7 @@ type UnixTransport struct {
 	listener net.Listener
 	msgChan  chan ubus.Message
 	clients  map[string]net.Conn
+	rootDir  string
 }
 
 const (
@@ -27,12 +28,7 @@ const (
 )
 
 func NewUnixTransport(socketDir string) (*UnixTransport, error) {
-	uuidId, err := uuid.NewRandom()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create uuid: %w", err)
-	}
-
-	id := uuidId.String()
+	id := uuid.NewString()
 
 	if err := os.Mkdir(socketDir, 0755); err != nil {
 		if !errors.Is(err, os.ErrExist) {
@@ -47,6 +43,7 @@ func NewUnixTransport(socketDir string) (*UnixTransport, error) {
 
 	socket := path.Join(socketDir, fmt.Sprintf("%s.sock", id))
 	ut := &UnixTransport{
+		rootDir: socketDir,
 		socket:  socket,
 		clients: make(map[string]net.Conn, 0),
 	}
@@ -90,7 +87,13 @@ func (t *UnixTransport) Listen(ready chan struct{}) error {
 	}
 }
 
+func (t *UnixTransport) HasClients() bool {
+	return len(t.clients) > 0
+}
+
 func (t *UnixTransport) Close() error {
+	hasClients := t.HasClients()
+
 	if err := os.Remove(t.socket); err != nil {
 		return fmt.Errorf("failed to remove socket: %w", err)
 	}
@@ -100,13 +103,19 @@ func (t *UnixTransport) Close() error {
 		Data:  t.socket,
 	})
 
-	for _, c := range t.clients {
-		if err := c.Close(); err != nil {
-			fmt.Printf("Failed to close client: %v\n", err)
+	t.teardownClients()
+
+	if err := t.listener.Close(); err != nil {
+		return fmt.Errorf("failed to close listener: %w", err)
+	}
+
+	if !hasClients {
+		if err := os.RemoveAll(t.rootDir); err != nil {
+			return fmt.Errorf("failed to remove root directory: %w", err)
 		}
 	}
 
-	return t.listener.Close()
+	return nil
 }
 
 func (t *UnixTransport) Subscribe(msgChan chan ubus.Message) {
@@ -190,5 +199,15 @@ func (t *UnixTransport) teardownClient(socket string) {
 		}
 
 		delete(t.clients, socket)
+	}
+}
+
+func (t *UnixTransport) teardownClients() {
+	for s, c := range t.clients {
+		if err := c.Close(); err != nil {
+			fmt.Printf("Failed to close client: %v", err)
+		}
+
+		delete(t.clients, s)
 	}
 }
